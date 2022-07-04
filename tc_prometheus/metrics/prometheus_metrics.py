@@ -35,6 +35,11 @@ class Metrics(BaseMetrics):
         }
 
     def incr(self, metricname, value=1):
+        # Remove 4 lines when https://github.com/thumbor-community/prometheus/issues/9 is resolved
+        if (metricname == "response.smart"):
+            metricname = "response.smart.count"
+        if (metricname == "response.none_smart"):
+            metricname = "response.none_smart.count"
         name, labels = self.__data(metricname)
 
         if name not in Metrics.counters:
@@ -48,6 +53,12 @@ class Metrics(BaseMetrics):
         counter.inc(value)
 
     def timing(self, metricname, value):
+        # Remove 4 lines when https://github.com/thumbor-community/prometheus/issues/9 is resolved
+        if (metricname == "response.smart"):
+            metricname = "response.smart.latency"
+        if (metricname == "response.none_smart"):
+            metricname = "response.none_smart.latency"
+
         name, labels = self.__data(metricname)
 
         if name not in Metrics.summaries:
