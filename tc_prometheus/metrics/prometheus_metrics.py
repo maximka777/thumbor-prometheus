@@ -6,8 +6,13 @@
 # Copyright (c) 2017 Simon Effenberg <savar@schuldeigen.de>
 # Copyright (c) 2017 Thumbor Community Extensions
 
-from prometheus_client import Counter, start_http_server, Summary
+from prometheus_client import Counter, make_wsgi_app, Summary, REGISTRY
 from thumbor.metrics import BaseMetrics
+
+import socket
+import threading
+from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
+from socketserver import ThreadingMixIn
 
 
 class Metrics(BaseMetrics):
@@ -19,7 +24,7 @@ class Metrics(BaseMetrics):
             port = config.PROMETHEUS_SCRAPE_PORT
             if isinstance(port, str):
                 port = int(port)
-            start_http_server(port)
+            self.server = self._start_http_server(port)
             Metrics.http_server_started = True
             Metrics.counters = {}
             Metrics.summaries = {}
@@ -33,6 +38,44 @@ class Metrics(BaseMetrics):
                 'original_image.fetch': ['statuscode', 'networklocation'],
                 'response.time': ['statuscode_extension'],
         }
+
+    def stop_server(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+        delattr(Metrics, 'http_server_started')
+
+        collectors = list(REGISTRY._collector_to_names.keys())
+        for collector in collectors:
+            REGISTRY.unregister(collector)
+
+    # copied from https://github.com/prometheus/client_python and modified
+    def _start_http_server(self, port):
+        class SilentHandler(WSGIRequestHandler):
+            """WSGI handler that does not log requests."""
+
+            def log_message(self, format, *args):
+                """Log nothing."""
+
+        class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+            """Thread per request HTTP server."""
+            daemon_threads = True
+
+        class TmpServer(ThreadingWSGIServer):
+            """Copy of ThreadingWSGIServer to update address_family locally"""
+
+        addr = '0.0.0.0'
+
+        infos = socket.getaddrinfo(addr, port)
+        family, _, _, _, sockaddr = next(iter(infos))
+        TmpServer.address_family, addr = family, sockaddr[0]
+
+        app = make_wsgi_app(REGISTRY)
+        server = make_server(addr, port, app, TmpServer, handler_class=SilentHandler)
+        t = threading.Thread(target=server.serve_forever)
+        t.daemon = True
+        t.start()
+        return server
 
     def incr(self, metricname, value=1):
         name, labels = self.__data(metricname)

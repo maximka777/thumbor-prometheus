@@ -20,7 +20,7 @@ class MetricsContext(TestCase):
     def setUp(self):
         self.config = Config()
         self.config.METRICS = 'tc_prometheus.metrics.prometheus_metrics'
-        self.config.PROMETHEUS_SCRAPE_PORT = '8001'
+        self.config.PROMETHEUS_SCRAPE_PORT = 8001
         
         self.importer = Importer(self.config)
         self.importer.import_modules()
@@ -28,7 +28,7 @@ class MetricsContext(TestCase):
         self.context = Context(None, self.config, self.importer)
 
     def tearDown(self):
-        pass
+        self.context.metrics.stop_server()
 
 
 class CanCreateContextWithPrometheusMetrics(MetricsContext):
@@ -67,3 +67,37 @@ class PrometheusEndpoint(MetricsContext):
         expect(body).to_include('thumbor_test_timer_count 2')
         expect(body).to_include('thumbor_test_timer_sum 500')
         expect(body).to_include('thumbor_response_status_total{statuscode="200"} 1')
+
+
+class PrometheusEndpointWithPortSetAsString(TestCase):
+    def test_should_present_metrics_on_port_set_as_string(self):
+        self.config = Config()
+        self.config.METRICS = 'tc_prometheus.metrics.prometheus_metrics'
+        self.config.PROMETHEUS_SCRAPE_PORT = '8002'
+
+        self.importer = Importer(self.config)
+        self.importer.import_modules()
+
+        self.context = Context(None, self.config, self.importer)
+
+        self.http_client = HTTPClient()
+
+        self.context.metrics.incr('test.counter')
+        self.context.metrics.incr('test.counter', 5)
+        self.context.metrics.timing('test.timer', 150)
+        self.context.metrics.timing('test.timer', 350)
+        self.context.metrics.incr('response.status.200', 1)
+
+        response = self.http_client.fetch('http://localhost:8002')
+
+        expect(response.body).Not.to_be_null()
+
+        body = str(response.body)
+
+        expect(body).to_include('thumbor_test_counter_total 6')
+        expect(body).to_include('thumbor_test_timer_count 2')
+        expect(body).to_include('thumbor_test_timer_sum 500')
+        expect(body).to_include('thumbor_response_status_total{statuscode="200"} 1')
+
+        self.http_client.close()
+        self.context.metrics.stop_server()
