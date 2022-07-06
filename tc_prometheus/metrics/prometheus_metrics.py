@@ -29,17 +29,24 @@ class Metrics(BaseMetrics):
                 'response.status': ['statuscode'],
                 'response.format': ['extension'],
                 'response.bytes': ['extension'],
-                'original_image.status': ['statuscode'],
-                'original_image.fetch': ['statuscode', 'networklocation'],
                 'response.time': ['statuscode_extension'],
+                'original_image.status': ['statuscode', 'networklocation'],
+                # When https://github.com/thumbor-community/prometheus/issues/9 is resolved,
+                # replace two lines below with
+                # 'original_image.fetch': ['statuscode', 'networklocation'],
+                'original_image.fetch.count': ['statuscode', 'networklocation'], 
+                'original_image.fetch.latency': ['statuscode', 'networklocation'], # Remove when https://github.com/thumbor-community/prometheus/issues/9 is resolved
         }
 
     def incr(self, metricname, value=1):
-        # Remove 4 lines when https://github.com/thumbor-community/prometheus/issues/9 is resolved
+        # Remove monkey patches below when https://github.com/thumbor-community/prometheus/issues/9 is resolved
         if (metricname == "response.smart"):
             metricname = "response.smart.count"
         if (metricname == "response.none_smart"):
             metricname = "response.none_smart.count"
+        if (metricname.startswith("original_image.fetch.")):
+            metricname = metricname.replace("original_image.fetch.", "original_image.fetch.counter.")
+
         name, labels = self.__data(metricname)
 
         if name not in Metrics.counters:
@@ -53,11 +60,13 @@ class Metrics(BaseMetrics):
         counter.inc(value)
 
     def timing(self, metricname, value):
-        # Remove 4 lines when https://github.com/thumbor-community/prometheus/issues/9 is resolved
+        # Remove monkey patches below when https://github.com/thumbor-community/prometheus/issues/9 is resolved
         if (metricname == "response.smart"):
             metricname = "response.smart.latency"
         if (metricname == "response.none_smart"):
             metricname = "response.none_smart.latency"
+        if (metricname.startswith("original_image.fetch.")):
+            metricname = metricname.replace("original_image.fetch.", "original_image.fetch.latency.")
 
         name, labels = self.__data(metricname)
 
@@ -91,16 +100,15 @@ class Metrics(BaseMetrics):
         if name not in self.mapping:
             return {}
 
+        keys = self.mapping[name]
+
         # the split('.', MAXSPLIT) is mainly necessary to get the correct
         # stuff for original_image.fetch where the networklocation is
         # something like 'domain' so like 'test.com' and would be splitted at
         # least 1 time too often
         values = metricname.replace(name + '.', '').split('.', len(self.mapping[name])-1)
-        labels = {}
-        for index, label in enumerate(self.mapping[name]):
-            labels[label] = values[index]
 
-        return labels
+        return dict(zip(keys, values))
 
     def __basename(self, metricname):
         for mapped in self.mapping.keys():
