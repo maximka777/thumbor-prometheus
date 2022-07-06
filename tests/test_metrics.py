@@ -56,6 +56,8 @@ class PrometheusEndpoint(MetricsContext):
         self.context.metrics.timing('test.timer', 150)
         self.context.metrics.timing('test.timer', 350)
         self.context.metrics.incr('response.status.200', 1)
+        self.context.metrics.incr("original_image.status.created")
+        self.context.metrics.incr("original_image.status.created.images.com")
 
         response = self.http_client.fetch('http://localhost:8001')
 

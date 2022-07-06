@@ -100,15 +100,16 @@ class Metrics(BaseMetrics):
         if name not in self.mapping:
             return {}
 
-        keys = self.mapping[name]
-
         # the split('.', MAXSPLIT) is mainly necessary to get the correct
         # stuff for original_image.fetch where the networklocation is
         # something like 'domain' so like 'test.com' and would be splitted at
         # least 1 time too often
         values = metricname.replace(name + '.', '').split('.', len(self.mapping[name])-1)
+        labels = {}
+        for index, label in enumerate(self.mapping[name]):
+            labels[label] = values[index] if index < len(values) else None
 
-        return dict(zip(keys, values))
+        return labels
 
     def __basename(self, metricname):
         for mapped in self.mapping.keys():
